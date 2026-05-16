@@ -1,5 +1,5 @@
 """
-بوت تيليجرام — سيستم إدارة باقات الإنترنت WE / بودي
+بوت تيليجرام — سيستم إدارة باقات الإنترنت محمود / بودي
 =====================================================
 المتطلبات:
     pip install python-telegram-bot gspread google-auth
@@ -255,11 +255,11 @@ MAIN_KEYBOARD = ReplyKeyboardMarkup([
 
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not is_allowed(update):
-        await update.message.reply_text("⛔ عيني عينك يا عم! مش مصرح ليك هنا 😤\nروح نام بقى 😴")
+        await update.message.reply_text("⛔ عيني عينك يا عم! مش مصرح ليك هنا 😤\nروح نام بقى يمحمود متبقاش رخم 😴")
         return ConversationHandler.END
     ctx.user_data.clear()
     await update.message.reply_text(
-        "🌐 *سيستم باقات الإنترنت — WE / بودي*\n\nاختار العملية:",
+        "🌐 *سيستم باقات الإنترنت — محمود / بودي*\n\nاختار العملية ي عبادي:",
         reply_markup=MAIN_KEYBOARD,
         parse_mode="Markdown"
     )
@@ -273,12 +273,12 @@ async def main_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("📦 باقة عادية", callback_data="type_package")],
             [InlineKeyboardButton("🚀 شحن إضافي",  callback_data="type_extra")],
         ]
-        await update.message.reply_text("يلا يا نجم! 💪 اختار نوع الخدمة:",
+        await update.message.reply_text("!💪 يلا يا حودة اختار نوع الخدمة:",
                                         reply_markup=InlineKeyboardMarkup(kb))
         return STATE_ADD_TYPE
 
     elif text == "✅ تسجيل دفعة":
-        await update.message.reply_text("🔍 يلا اكتب اسم العميل أو رقمه، هدور ليك فالحال 😎")
+        await update.message.reply_text("🔍😎 يلا اكتب اسم العميل أو رقمه، هدور ليك فالحال يباشا ")
         return STATE_PAY_SEARCH
 
     elif text == "💸 تحويل للمدير":
@@ -290,7 +290,7 @@ async def main_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             f"📱 الرقم: {cfg['phone']}\n"
             f"💳 طريقة التحويل الافتراضية: {cfg['method']}\n\n"
             f"💵 الكاش المتاح عندك: *{s['cash']} ج.م*\n\n"
-            f"اكتب المبلغ يا معلم وأنا هسجله فالحال 💸",
+            f" اكتب المبلغ يا معلم وأنا هسجله فالحال ي عمدة 💸",
             parse_mode="Markdown"
         )
         return STATE_TRANSFER_AMOUNT
@@ -300,7 +300,7 @@ async def main_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             f"📥 *استلام رصيد WE من المدير*\n\n"
             f"📶 رصيد WE الحالي عندك: *{s['we_bal']} ج.م*\n\n"
-            f"ممتاز يا كبير! كام استلمت من المدير؟ 📥",
+            f"ممتاز يا عبادي! كام استلمت من المدير؟ 📥",
             parse_mode="Markdown"
         )
         return STATE_RECEIVE_AMOUNT
@@ -382,7 +382,7 @@ async def add_phone(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             f"{p['name']} ◀ {p['sell']} ج.م ({p['giga']}G)",
             callback_data=f"pkg_{i}"
         )] for i, p in enumerate(pkgs)]
-        await update.message.reply_text("📦 هوه ده اللي عندنا يا باشا، اختار اللي يعجبك:",
+        await update.message.reply_text("📦 هوه ده اللي عندنا يا حودة، اختار اللي يعجبك:",
                                         reply_markup=InlineKeyboardMarkup(kb))
         return STATE_ADD_PKG
     else:
