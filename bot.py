@@ -79,8 +79,9 @@ def to_float(val):
     return float(nums[0]) if nums else 0.0
 
 def get_sheet(name: str):
-    import json, os
-    creds_info = json.loads(os.environ["GOOGLE_CREDENTIALS"])
+    import json, os, base64
+    raw = os.environ["GOOGLE_CREDENTIALS_B64"]
+    creds_info = json.loads(base64.b64decode(raw).decode())
     creds = Credentials.from_service_account_info(creds_info, scopes=SCOPES)
     client = gspread.authorize(creds)
     return client.open_by_key(SPREADSHEET_ID).worksheet(name)
