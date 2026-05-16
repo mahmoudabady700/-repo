@@ -161,10 +161,12 @@ def get_summary():
 # ══════════════════════════════════════════════
 # Google Sheets — كتابة
 # ══════════════════════════════════════════════
+TOTAL_ROW = 504  # صف الإجمالي — لا يُكتب فيه
+
 def find_next_empty_row(ws) -> int:
     col_b = ws.col_values(2)
     for i, val in enumerate(col_b[DATA_START_ROW - 1:], start=DATA_START_ROW):
-        if not val:
+        if not val and i != TOTAL_ROW:
             return i
     return len(col_b) + 1
 
