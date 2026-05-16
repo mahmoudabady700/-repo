@@ -31,8 +31,8 @@ SHEET_CLIENTS  = " سجل العملاء"
 SHEET_CONFIG   = "الإعدادات"
 SHEET_CASH     = " تحويل الرصيد"
 
-DATA_START_ROW = 5
-TOTAL_ROW      = 4  # صف الإجمالي الثابت — لا يُكتب فيه
+DATA_START_ROW = 4
+TOTAL_ROW      = 503
 
 # ══════════════════════════════════════════════
 # Logging
@@ -129,7 +129,7 @@ def get_transfer_config():
 
 def get_all_clients():
     ws = get_sheet(SHEET_CLIENTS)
-    rows = ws.get_values(f"A{DATA_START_ROW}:M503")
+    rows = ws.get_values(f"A{DATA_START_ROW}:M200")
     clients = []
     for i, row in enumerate(rows, start=DATA_START_ROW):
         if len(row) > 1 and row[1]:
@@ -255,7 +255,7 @@ MAIN_KEYBOARD = ReplyKeyboardMarkup([
 
 async def start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     if not is_allowed(update):
-        await update.message.reply_text("⛔ مش مصرح ليك.")
+        await update.message.reply_text("⛔ عيني عينك يا عم! مش مصرح ليك هنا 😤\nروح نام بقى 😴")
         return ConversationHandler.END
     ctx.user_data.clear()
     await update.message.reply_text(
@@ -273,12 +273,12 @@ async def main_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             [InlineKeyboardButton("📦 باقة عادية", callback_data="type_package")],
             [InlineKeyboardButton("🚀 شحن إضافي",  callback_data="type_extra")],
         ]
-        await update.message.reply_text("اختار نوع الخدمة:",
+        await update.message.reply_text("يلا يا نجم! 💪 اختار نوع الخدمة:",
                                         reply_markup=InlineKeyboardMarkup(kb))
         return STATE_ADD_TYPE
 
     elif text == "✅ تسجيل دفعة":
-        await update.message.reply_text("🔍 اكتب اسم أو رقم هاتف العميل:")
+        await update.message.reply_text("🔍 يلا اكتب اسم العميل أو رقمه، هدور ليك فالحال 😎")
         return STATE_PAY_SEARCH
 
     elif text == "💸 تحويل للمدير":
@@ -290,7 +290,7 @@ async def main_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             f"📱 الرقم: {cfg['phone']}\n"
             f"💳 طريقة التحويل الافتراضية: {cfg['method']}\n\n"
             f"💵 الكاش المتاح عندك: *{s['cash']} ج.م*\n\n"
-            f"اكتب المبلغ المراد تحويله:",
+            f"اكتب المبلغ يا معلم وأنا هسجله فالحال 💸",
             parse_mode="Markdown"
         )
         return STATE_TRANSFER_AMOUNT
@@ -300,16 +300,16 @@ async def main_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             f"📥 *استلام رصيد WE من المدير*\n\n"
             f"📶 رصيد WE الحالي عندك: *{s['we_bal']} ج.م*\n\n"
-            f"اكتب المبلغ المستلم:",
+            f"ممتاز يا كبير! كام استلمت من المدير؟ 📥",
             parse_mode="Markdown"
         )
         return STATE_RECEIVE_AMOUNT
 
     elif text == "👥 قائمة العملاء":
-        await update.message.reply_text("⏳ جاري التحميل...")
+        await update.message.reply_text("⏳ لحظة بجيبلك القائمة يا هندسة... 📋")
         clients = get_all_clients()
         if not clients:
-            await update.message.reply_text("لا يوجد عملاء مسجلين.")
+            await update.message.reply_text("😅 ماشيش عميل لسه يا معلم! ابدأ بإضافة أول عميل 🚀")
             return STATE_MAIN
         msg = "👥 *آخر 10 عملاء:*\n\n"
         for c in clients[-10:]:
@@ -324,11 +324,11 @@ async def main_menu(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return STATE_MAIN
 
     elif text == "🔍 بحث عميل":
-        await update.message.reply_text("🔍 اكتب اسم أو رقم هاتف العميل:")
+        await update.message.reply_text("🔍 يلا اكتب اسم العميل أو رقمه، هدور ليك فالحال 😎")
         return STATE_SEARCH_CLIENT
 
     elif text == "📊 ملخص الحساب":
-        await update.message.reply_text("⏳ جاري التحميل...")
+        await update.message.reply_text("⏳ لحظة بجيبلك القائمة يا هندسة... 📋")
         s = get_summary()
         clients = get_all_clients()
         unpaid  = [c for c in clients if c["pay_status"] != "مدفوع"]
@@ -364,29 +364,29 @@ async def add_type(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     ctx.user_data["add_type"] = query.data
-    await query.edit_message_text("👤 اكتب اسم العميل:")
+    await query.edit_message_text("تمام يا أسطى! 😎 اكتب اسم العميل:")
     return STATE_ADD_NAME
 
 async def add_name(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     ctx.user_data["add_name"] = update.message.text.strip()
-    await update.message.reply_text("📞 اكتب رقم الهاتف:")
+    await update.message.reply_text("👌 وصلت! دلوقتي اكتب رقم الهاتف يا معلم:")
     return STATE_ADD_PHONE
 
 async def add_phone(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     ctx.user_data["add_phone"] = update.message.text.strip()
     if ctx.user_data["add_type"] == "type_package":
-        await update.message.reply_text("⏳ جاري تحميل الباقات...")
+        await update.message.reply_text("⏳ لحظة يا صبر جميل، جاري جيب الباقات 🚀")
         pkgs = get_packages()
         ctx.user_data["packages"] = pkgs
         kb = [[InlineKeyboardButton(
             f"{p['name']} ◀ {p['sell']} ج.م ({p['giga']}G)",
             callback_data=f"pkg_{i}"
         )] for i, p in enumerate(pkgs)]
-        await update.message.reply_text("📦 اختار الباقة:",
+        await update.message.reply_text("📦 هوه ده اللي عندنا يا باشا، اختار اللي يعجبك:",
                                         reply_markup=InlineKeyboardMarkup(kb))
         return STATE_ADD_PKG
     else:
-        await update.message.reply_text("🌐 اكتب عدد الجيجا:")
+        await update.message.reply_text("🌐 تمام يا نور عيني! كام جيجا عايز تشحنله؟")
         return STATE_ADD_GIGA
 
 async def add_pkg(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -398,7 +398,7 @@ async def add_pkg(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         f"✅ *{pkg['name']}*\n"
         f"💰 {pkg['price']} ج.م | 🚚 عمولة {pkg['comm']} ج.م | 🏷️ بيع {pkg['sell']} ج.م\n"
         f"🌐 {pkg['giga']}G | 📆 {pkg['days']} يوم\n\n"
-        f"📝 ملاحظة؟ (أو /skip)",
+        f"📝 عندك ملاحظة على العميل؟\nلو مفيش اكتب /skip يا هندسة 😄",
         parse_mode="Markdown"
     )
     return STATE_ADD_NOTES
@@ -418,7 +418,7 @@ async def add_giga(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         f"✅ *شحن إضافي*\n"
         f"🌐 {giga}G | كمية {round(giga/5,1)} وحدة\n"
         f"💰 {bal} ج.م | 🚚 عمولة {cfg['comm']} ج.م | 🏷️ بيع {sell} ج.م\n\n"
-        f"📝 ملاحظة؟ (أو /skip)",
+        f"📝 عندك ملاحظة على العميل؟\nلو مفيش اكتب /skip يا هندسة 😄",
         parse_mode="Markdown"
     )
     return STATE_ADD_NOTES
@@ -455,9 +455,9 @@ async def add_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     if query.data == "cancel_add":
-        await query.edit_message_text("❌ تم الإلغاء.")
+        await query.edit_message_text("❌ تمام يا هندسة، ألغينا العملية 😄\nكلما تحتاج أنا هنا! 🫡")
         return ConversationHandler.END
-    await query.edit_message_text("⏳ جاري الإضافة...")
+    await query.edit_message_text("⏳ ثانية يا عم، بسجل في الشيت 📝")
     d = ctx.user_data
     data = {"type": "package" if d["add_type"] == "type_package" else "extra",
             "name": d["add_name"], "phone": d["add_phone"],
@@ -486,7 +486,7 @@ async def add_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 # ══════════════════════════════════════════════
 async def pay_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     search  = update.message.text.strip().lower()
-    await update.message.reply_text("⏳ جاري البحث...")
+    await update.message.reply_text("⏳ بدور عليه دلوقتي يا سيدي... 🔍")
     clients = get_all_clients()
     results = [c for c in clients
                if (search in c["name"].lower() or search in c["phone"])
@@ -499,7 +499,7 @@ async def pay_search(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         f"{c['name']} — {c['package']} — {c['sell']} ج.م",
         callback_data=f"pay_{c['row']}"
     )] for c in results[:8]]
-    await update.message.reply_text("اختار العميل:", reply_markup=InlineKeyboardMarkup(kb))
+    await update.message.reply_text("لقيتهم! اختار العميل يا باشا: 👇", reply_markup=InlineKeyboardMarkup(kb))
     return STATE_PAY_SELECT
 
 async def pay_select(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -529,9 +529,9 @@ async def pay_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     if query.data == "cancel_pay":
-        await query.edit_message_text("❌ تم الإلغاء.")
+        await query.edit_message_text("❌ تمام يا هندسة، ألغينا العملية 😄\nكلما تحتاج أنا هنا! 🫡")
         return ConversationHandler.END
-    await query.edit_message_text("⏳ جاري التحديث...")
+    await query.edit_message_text("⏳ ثانية بسجل الدفعة يا نجم... 💳")
     try:
         mark_as_paid(ctx.user_data["pay_row_num"])
         c = ctx.user_data["pay_client"]
@@ -600,9 +600,9 @@ async def transfer_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     if query.data == "cancel_transfer":
-        await query.edit_message_text("❌ تم الإلغاء.")
+        await query.edit_message_text("❌ تمام يا هندسة، ألغينا العملية 😄\nكلما تحتاج أنا هنا! 🫡")
         return ConversationHandler.END
-    await query.edit_message_text("⏳ جاري التسجيل في الشيت...")
+    await query.edit_message_text("⏳ بسجل التحويل دلوقتي يا هندسة... ✍️")
     try:
         amount = ctx.user_data["transfer_amount"]
         method = ctx.user_data["transfer_method"]
@@ -663,9 +663,9 @@ async def receive_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     if query.data == "cancel_receive":
-        await query.edit_message_text("❌ تم الإلغاء.")
+        await query.edit_message_text("❌ تمام يا هندسة، ألغينا العملية 😄\nكلما تحتاج أنا هنا! 🫡")
         return ConversationHandler.END
-    await query.edit_message_text("⏳ جاري التسجيل...")
+    await query.edit_message_text("⏳ بسجله دلوقتي... 📝")
     try:
         amount  = ctx.user_data["receive_amount"]
         note    = ctx.user_data.get("receive_note", "")
@@ -687,12 +687,12 @@ async def receive_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 # ══════════════════════════════════════════════
 async def search_client(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     search  = update.message.text.strip().lower()
-    await update.message.reply_text("⏳ جاري البحث...")
+    await update.message.reply_text("⏳ بدور عليه دلوقتي يا سيدي... 🔍")
     clients = get_all_clients()
     results = [c for c in clients
                if search in c["name"].lower() or search in c["phone"]]
     if not results:
-        await update.message.reply_text("🔍 مفيش عملاء بالاسم أو الرقم ده.")
+        await update.message.reply_text("🤷 والله مش لاقيش حد بالاسم أو الرقم ده يا معلم! جرب تاني؟ 🔍")
         return STATE_MAIN
     msg = f"🔍 *نتائج البحث ({len(results)} عميل):*\n\n"
     for c in results[:10]:
@@ -710,7 +710,7 @@ async def search_client(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
 # ══════════════════════════════════════════════
 async def cancel(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     ctx.user_data.clear()
-    await update.message.reply_text("❌ تم الإلغاء.")
+    await update.message.reply_text("❌ تمام يا هندسة، ألغينا العملية 😄\nكلما تحتاج أنا هنا! 🫡")
     return await start(update, ctx)
 
 # ══════════════════════════════════════════════
