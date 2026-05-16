@@ -80,8 +80,8 @@ def to_float(val):
 
 def get_sheet(name: str):
     import json, os
-creds_info = json.loads(os.environ["GOOGLE_CREDENTIALS"])
-creds = Credentials.from_service_account_info(creds_info, scopes=SCOPES)
+    creds_info = json.loads(os.environ["GOOGLE_CREDENTIALS"])
+    creds = Credentials.from_service_account_info(creds_info, scopes=SCOPES)
     client = gspread.authorize(creds)
     return client.open_by_key(SPREADSHEET_ID).worksheet(name)
 
