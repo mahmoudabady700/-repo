@@ -31,7 +31,8 @@ SHEET_CLIENTS  = " سجل العملاء"
 SHEET_CONFIG   = "الإعدادات"
 SHEET_CASH     = " تحويل الرصيد"
 
-DATA_START_ROW = 4
+DATA_START_ROW = 5
+TOTAL_ROW      = 4  # صف الإجمالي الثابت — لا يُكتب فيه
 
 # ══════════════════════════════════════════════
 # Logging
@@ -128,7 +129,7 @@ def get_transfer_config():
 
 def get_all_clients():
     ws = get_sheet(SHEET_CLIENTS)
-    rows = ws.get_values(f"A{DATA_START_ROW}:M200")
+    rows = ws.get_values(f"A{DATA_START_ROW}:M503")
     clients = []
     for i, row in enumerate(rows, start=DATA_START_ROW):
         if len(row) > 1 and row[1]:
@@ -161,8 +162,6 @@ def get_summary():
 # ══════════════════════════════════════════════
 # Google Sheets — كتابة
 # ══════════════════════════════════════════════
-TOTAL_ROW = 504  # صف الإجمالي — لا يُكتب فيه
-
 def find_next_empty_row(ws) -> int:
     col_b = ws.col_values(2)
     for i, val in enumerate(col_b[DATA_START_ROW - 1:], start=DATA_START_ROW):
