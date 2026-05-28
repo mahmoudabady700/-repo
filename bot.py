@@ -23,7 +23,8 @@ from google.oauth2.service_account import Credentials
 # ══════════════════════════════════════════════
 # إعدادات — عدّل هنا فقط
 # ══════════════════════════════════════════════
-BOT_TOKEN      = "8674540763:AAEVQeWHPqrZwZMMfO8g8HEY-m6WTtNdT8o"
+import os
+BOT_TOKEN = os.environ["BOT_TOKEN"]
 SPREADSHEET_ID = "1zJF0_hdbgh63NcwuA5Qz0J-dYfMdQbeQ5BBnWMi3L5A"
 ALLOWED_USERS  = [6843334319]
 
