@@ -74,12 +74,12 @@ logger = logging.getLogger(__name__)
     STATE_MAIN,
     STATE_ADD_TYPE, STATE_ADD_NAME, STATE_ADD_PHONE,
     STATE_ADD_PKG,  STATE_ADD_GIGA, STATE_ADD_NOTES, STATE_ADD_CONFIRM,
-    STATE_PAY_SEARCH, STATE_PAY_SELECT, STATE_PAY_CONFIRM,
+    STATE_PAY_SEARCH, STATE_PAY_SELECT, STATE_PAY_DATE, STATE_PAY_CONFIRM,
     STATE_TRANSFER_AMOUNT, STATE_TRANSFER_METHOD, STATE_TRANSFER_CONFIRM,
     STATE_RECEIVE_AMOUNT,  STATE_RECEIVE_NOTE,    STATE_RECEIVE_CONFIRM,
     STATE_SEARCH_CLIENT,
-    STATE_EXTRA_PHONE, STATE_EXTRA_GIGA, STATE_EXTRA_CONFIRM,
-) = range(21)
+    STATE_EXTRA_SEARCH_TYPE, STATE_EXTRA_PHONE, STATE_EXTRA_NAME, STATE_EXTRA_GIGA, STATE_EXTRA_CONFIRM,
+) = range(24)
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -532,45 +532,92 @@ async def add_pkg(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     )
     return STATE_ADD_NOTES
 
-# ── شحن إضافي — منطق التحقق من الباقة ────────
+# ── شحن إضافي — اختيار طريقة البحث ──────────
+async def extra_search_type(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """يعرض خيارين: بحث بالرقم أو بالاسم"""
+    query = update.callback_query
+    await query.answer()
+    ctx.user_data["add_type"] = "type_extra"
+    if query.data == "type_extra":
+        kb = [
+            [InlineKeyboardButton("📞 بحث برقم الهاتف", callback_data="extra_by_phone")],
+            [InlineKeyboardButton("👤 بحث بالاسم",       callback_data="extra_by_name")],
+        ]
+        await query.edit_message_text(
+            "🚀 *شحن إضافي*\n\nتبحث بإيه عن العميل؟",
+            reply_markup=InlineKeyboardMarkup(kb),
+            parse_mode="Markdown",
+        )
+        return STATE_EXTRA_SEARCH_TYPE
+    # باقة عادية — تكمل المسار الأصلي
+    await query.edit_message_text("تمام يا أسطى! 😎 اكتب اسم العميل:")
+    return STATE_ADD_NAME
+
+async def extra_search_choice(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    if query.data == "extra_by_phone":
+        ctx.user_data["extra_search_by"] = "phone"
+        await query.edit_message_text("📞 اكتب رقم هاتف العميل:")
+        return STATE_EXTRA_PHONE
+    else:
+        ctx.user_data["extra_search_by"] = "name"
+        await query.edit_message_text("👤 اكتب اسم العميل:")
+        return STATE_EXTRA_NAME
+
 async def extra_phone(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     phone = update.message.text.strip()
     ctx.user_data["add_phone"] = phone
     await update.message.reply_text("⏳ بدور على بياناته في الشيت...")
-
     result = check_extra_charge_eligibility(phone, "")
-    ctx.user_data["eligibility"] = result
+    await _handle_extra_eligibility(update, ctx, result)
+    return _extra_next_state(result)
 
+async def extra_name(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    name = update.message.text.strip()
+    ctx.user_data["add_name"] = name
+    await update.message.reply_text("⏳ بدور على بياناته في الشيت...")
+    result = check_extra_charge_eligibility("", name)
     if result["status"] == "not_found":
-        # مش لاقيه برقمه — اطلب الاسم كـ fallback
         await update.message.reply_text(
-            f"{result['message']}\n\nاكتب اسمه عشان أدور تاني:"
+            f"{result['message']}\n\nجرب اكتب الاسم تاني أو /cancel:"
         )
-        return STATE_ADD_NAME   # سنعيد البحث بالاسم في add_giga
+        return STATE_EXTRA_NAME
+    await _handle_extra_eligibility(update, ctx, result)
+    return _extra_next_state(result)
 
-    await update.message.reply_text(
-        result["message"],
-        parse_mode="Markdown",
-    )
-
+async def _handle_extra_eligibility(update, ctx, result):
+    """منطق مشترك بعد البحث سواء بالرقم أو الاسم"""
+    ctx.user_data["eligibility"] = result
+    if result["status"] == "not_found":
+        await update.message.reply_text(
+            f"{result['message']}\n\nجرب اكتب الرقم تاني أو /cancel:"
+        )
+        return
+    await update.message.reply_text(result["message"], parse_mode="Markdown")
     if result["status"] == "expired":
-        # الباقة منتهية — وقّف العملية
         await update.message.reply_text(
             "❌ العملية اتوقفت. اشحن باقة جديدة للعميل أولاً من قائمة ➕ إضافة عميل.",
             reply_markup=MAIN_KEYBOARD,
         )
-        return STATE_MAIN
-
-    # الباقة شغالة — اطلب عدد الجيجا
+        return
+    # الباقة شغالة — جهّز البيانات واطلب الجيجا
     cfg = get_extra_config()
     ctx.user_data["extra_cfg"]    = cfg
     ctx.user_data["add_name"]     = result["client"]["name"]
+    ctx.user_data["add_phone"]    = result["client"]["phone"]
     ctx.user_data["last_package"] = result["client"]
     await update.message.reply_text(
         f"🌐 تمام! كام جيجا عايز تشحنله؟\n"
         f"_(سعر الجيجا: {cfg['price_per_g']} ج.م | عمولة ثابتة: {cfg['comm']} ج.م)_",
         parse_mode="Markdown",
     )
+
+def _extra_next_state(result):
+    if result["status"] == "not_found":
+        return STATE_EXTRA_PHONE
+    if result["status"] == "expired":
+        return STATE_MAIN
     return STATE_EXTRA_GIGA
 
 async def extra_giga(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
