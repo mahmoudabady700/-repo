@@ -1039,11 +1039,16 @@ def main():
             CommandHandler("start",  start),
         ],
         allow_reentry=True,
+        per_message=False,   # CallbackQueryHandler tracked per-conversation, not per-message
     )
 
     app.add_handler(conv)
     logger.info("🤖 Bot started!")
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+    # drop_pending_updates=True يمنع تعارض الـ getUpdates لو في instance تاني قديم
+    app.run_polling(
+        allowed_updates=Update.ALL_TYPES,
+        drop_pending_updates=True,
+    )
 
 if __name__ == "__main__":
     main()
