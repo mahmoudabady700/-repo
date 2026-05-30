@@ -74,12 +74,14 @@ logger = logging.getLogger(__name__)
     STATE_MAIN,
     STATE_ADD_TYPE, STATE_ADD_NAME, STATE_ADD_PHONE,
     STATE_ADD_PKG,  STATE_ADD_GIGA, STATE_ADD_NOTES, STATE_ADD_CONFIRM,
-    STATE_PAY_SEARCH, STATE_PAY_SELECT, STATE_PAY_DATE, STATE_PAY_CONFIRM,
+    STATE_PAY_SEARCH, STATE_PAY_SELECT, STATE_PAY_CONFIRM,
+    STATE_PAY_DATE_CHOICE, STATE_PAY_CUSTOM_DATE,
     STATE_TRANSFER_AMOUNT, STATE_TRANSFER_METHOD, STATE_TRANSFER_CONFIRM,
     STATE_RECEIVE_AMOUNT,  STATE_RECEIVE_NOTE,    STATE_RECEIVE_CONFIRM,
     STATE_SEARCH_CLIENT,
-    STATE_EXTRA_SEARCH_TYPE, STATE_EXTRA_PHONE, STATE_EXTRA_NAME, STATE_EXTRA_GIGA, STATE_EXTRA_CONFIRM,
-) = range(24)
+    STATE_EXTRA_SEARCH_TYPE, STATE_EXTRA_PHONE, STATE_EXTRA_NAME,
+    STATE_EXTRA_GIGA, STATE_EXTRA_CONFIRM,
+) = range(26)
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -313,11 +315,11 @@ def add_client_row(data: dict) -> int:
     ws.update(range_name=f"A{row_n}:M{row_n}", values=[row])
     return row_n
 
-def mark_as_paid(row_num: int):
-    ws    = get_sheet(SHEET_CLIENTS)
-    today = datetime.now().strftime("%Y-%m-%d")
+def mark_as_paid(row_num: int, pay_date: str = None):
+    ws   = get_sheet(SHEET_CLIENTS)
+    date_val = pay_date or datetime.now().strftime("%Y-%m-%d")
     ws.update(range_name=f"K{row_num}", values=[["مدفوع"]])
-    ws.update(range_name=f"L{row_num}", values=[[today]])   # تاريخ استلام فلوس الشحن
+    ws.update(range_name=f"L{row_num}", values=[[date_val]])   # تاريخ استلام فلوس الشحن
 
 def add_transfer_row(amount: float, method: str, note: str = "") -> int:
     """يضيف صف في سجل التحويلات للمدير (D42:D80)"""
@@ -488,11 +490,16 @@ async def add_type(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     ctx.user_data["add_type"] = query.data  # type_package | type_extra
 
     if query.data == "type_extra":
+        kb = [
+            [InlineKeyboardButton("📞 بحث بالرقم",  callback_data="extra_search_phone")],
+            [InlineKeyboardButton("👤 بحث بالاسم",  callback_data="extra_search_name")],
+        ]
         await query.edit_message_text(
-            "🚀 *شحن إضافي*\n\nاكتب رقم هاتف العميل عشان أدور على باقته الحالية:",
+            "🚀 *شحن إضافي*\n\nعايز تدور على العميل بإيه؟",
+            reply_markup=InlineKeyboardMarkup(kb),
             parse_mode="Markdown",
         )
-        return STATE_EXTRA_PHONE
+        return STATE_EXTRA_SEARCH_TYPE
 
     await query.edit_message_text("تمام يا أسطى! 😎 اكتب اسم العميل:")
     return STATE_ADD_NAME
@@ -532,31 +539,12 @@ async def add_pkg(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     )
     return STATE_ADD_NOTES
 
-# ── شحن إضافي — اختيار طريقة البحث ──────────
+# ── شحن إضافي — منطق التحقق من الباقة ────────
 async def extra_search_type(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    """يعرض خيارين: بحث بالرقم أو بالاسم"""
+    """يستقبل اختيار نوع البحث (رقم أو اسم) للشحن الإضافي"""
     query = update.callback_query
     await query.answer()
-    ctx.user_data["add_type"] = "type_extra"
-    if query.data == "type_extra":
-        kb = [
-            [InlineKeyboardButton("📞 بحث برقم الهاتف", callback_data="extra_by_phone")],
-            [InlineKeyboardButton("👤 بحث بالاسم",       callback_data="extra_by_name")],
-        ]
-        await query.edit_message_text(
-            "🚀 *شحن إضافي*\n\nتبحث بإيه عن العميل؟",
-            reply_markup=InlineKeyboardMarkup(kb),
-            parse_mode="Markdown",
-        )
-        return STATE_EXTRA_SEARCH_TYPE
-    # باقة عادية — تكمل المسار الأصلي
-    await query.edit_message_text("تمام يا أسطى! 😎 اكتب اسم العميل:")
-    return STATE_ADD_NAME
-
-async def extra_search_choice(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    if query.data == "extra_by_phone":
+    if query.data == "extra_search_phone":
         ctx.user_data["extra_search_by"] = "phone"
         await query.edit_message_text("📞 اكتب رقم هاتف العميل:")
         return STATE_EXTRA_PHONE
@@ -565,43 +553,31 @@ async def extra_search_choice(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("👤 اكتب اسم العميل:")
         return STATE_EXTRA_NAME
 
-async def extra_phone(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    phone = update.message.text.strip()
-    ctx.user_data["add_phone"] = phone
-    await update.message.reply_text("⏳ بدور على بياناته في الشيت...")
-    result = check_extra_charge_eligibility(phone, "")
-    await _handle_extra_eligibility(update, ctx, result)
-    return _extra_next_state(result)
-
 async def extra_name(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """بحث بالاسم للشحن الإضافي"""
     name = update.message.text.strip()
-    ctx.user_data["add_name"] = name
+    ctx.user_data["add_name"]  = name
+    ctx.user_data["add_phone"] = ""
     await update.message.reply_text("⏳ بدور على بياناته في الشيت...")
-    result = check_extra_charge_eligibility("", name)
-    if result["status"] == "not_found":
-        await update.message.reply_text(
-            f"{result['message']}\n\nجرب اكتب الاسم تاني أو /cancel:"
-        )
-        return STATE_EXTRA_NAME
-    await _handle_extra_eligibility(update, ctx, result)
-    return _extra_next_state(result)
 
-async def _handle_extra_eligibility(update, ctx, result):
-    """منطق مشترك بعد البحث سواء بالرقم أو الاسم"""
+    result = check_extra_charge_eligibility("", name)
     ctx.user_data["eligibility"] = result
+
     if result["status"] == "not_found":
         await update.message.reply_text(
-            f"{result['message']}\n\nجرب اكتب الرقم تاني أو /cancel:"
+            f"{result['message']}\n\nجرب رقم هاتفه بدل الاسم:"
         )
-        return
+        return STATE_EXTRA_PHONE
+
     await update.message.reply_text(result["message"], parse_mode="Markdown")
+
     if result["status"] == "expired":
         await update.message.reply_text(
             "❌ العملية اتوقفت. اشحن باقة جديدة للعميل أولاً من قائمة ➕ إضافة عميل.",
             reply_markup=MAIN_KEYBOARD,
         )
-        return
-    # الباقة شغالة — جهّز البيانات واطلب الجيجا
+        return STATE_MAIN
+
     cfg = get_extra_config()
     ctx.user_data["extra_cfg"]    = cfg
     ctx.user_data["add_name"]     = result["client"]["name"]
@@ -612,12 +588,46 @@ async def _handle_extra_eligibility(update, ctx, result):
         f"_(سعر الجيجا: {cfg['price_per_g']} ج.م | عمولة ثابتة: {cfg['comm']} ج.م)_",
         parse_mode="Markdown",
     )
+    return STATE_EXTRA_GIGA
 
-def _extra_next_state(result):
+async def extra_phone(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    phone = update.message.text.strip()
+    ctx.user_data["add_phone"] = phone
+    await update.message.reply_text("⏳ بدور على بياناته في الشيت...")
+
+    result = check_extra_charge_eligibility(phone, "")
+    ctx.user_data["eligibility"] = result
+
     if result["status"] == "not_found":
-        return STATE_EXTRA_PHONE
+        # مش لاقيه برقمه — اطلب الاسم كـ fallback
+        await update.message.reply_text(
+            f"{result['message']}\n\nاكتب اسمه عشان أدور تاني:"
+        )
+        return STATE_ADD_NAME   # سنعيد البحث بالاسم في add_giga
+
+    await update.message.reply_text(
+        result["message"],
+        parse_mode="Markdown",
+    )
+
     if result["status"] == "expired":
+        # الباقة منتهية — وقّف العملية
+        await update.message.reply_text(
+            "❌ العملية اتوقفت. اشحن باقة جديدة للعميل أولاً من قائمة ➕ إضافة عميل.",
+            reply_markup=MAIN_KEYBOARD,
+        )
         return STATE_MAIN
+
+    # الباقة شغالة — اطلب عدد الجيجا
+    cfg = get_extra_config()
+    ctx.user_data["extra_cfg"]    = cfg
+    ctx.user_data["add_name"]     = result["client"]["name"]
+    ctx.user_data["last_package"] = result["client"]
+    await update.message.reply_text(
+        f"🌐 تمام! كام جيجا عايز تشحنله؟\n"
+        f"_(سعر الجيجا: {cfg['price_per_g']} ج.م | عمولة ثابتة: {cfg['comm']} ج.م)_",
+        parse_mode="Markdown",
+    )
     return STATE_EXTRA_GIGA
 
 async def extra_giga(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -817,6 +827,60 @@ async def pay_select(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("❌ حصل خطأ.")
         return ConversationHandler.END
     ctx.user_data.update({"pay_client": client, "pay_row_num": row_num})
+
+    # عرض خيار التاريخ
+    today = datetime.now()
+    kb = [
+        [InlineKeyboardButton(f"📅 تاريخ اليوم ({today.strftime('%d/%m/%Y')})", callback_data="paydate_today")],
+        [InlineKeyboardButton("📆 اختار تاريخ مختلف", callback_data="paydate_custom")],
+    ]
+    await query.edit_message_text(
+        f"💳 *{client['name']}* — {client['package']} — {client['sell']} ج.م\n\n"
+        f"📅 سجّل الدفعة بأي تاريخ؟",
+        reply_markup=InlineKeyboardMarkup(kb),
+        parse_mode="Markdown",
+    )
+    return STATE_PAY_DATE_CHOICE
+
+async def pay_date_choice(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """يستقبل اختيار تاريخ اليوم أو تاريخ مختلف"""
+    query = update.callback_query
+    await query.answer()
+
+    if query.data == "paydate_today":
+        ctx.user_data["pay_date"] = datetime.now().strftime("%Y-%m-%d")
+        return await _show_pay_confirm(query, ctx)
+
+    # عرض قائمة تواريخ: اليوم و6 أيام قبله
+    today = datetime.now()
+    kb = []
+    for i in range(7):
+        d = today - timedelta(days=i)
+        label = d.strftime("%d/%m/%Y")
+        if i == 0:
+            label += " (اليوم)"
+        elif i == 1:
+            label += " (أمس)"
+        kb.append([InlineKeyboardButton(label, callback_data=f"pickdate_{d.strftime('%Y-%m-%d')}")])
+    await query.edit_message_text(
+        "📆 اختار التاريخ من القائمة:",
+        reply_markup=InlineKeyboardMarkup(kb),
+    )
+    return STATE_PAY_CUSTOM_DATE
+
+async def pay_custom_date(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
+    """يستقبل التاريخ المختار من القائمة"""
+    query = update.callback_query
+    await query.answer()
+    chosen = query.data.replace("pickdate_", "")
+    ctx.user_data["pay_date"] = chosen
+    return await _show_pay_confirm(query, ctx)
+
+async def _show_pay_confirm(query, ctx: ContextTypes.DEFAULT_TYPE):
+    """يعرض شاشة تأكيد الدفعة بالتاريخ المختار"""
+    client   = ctx.user_data["pay_client"]
+    pay_date = ctx.user_data["pay_date"]
+    display  = datetime.strptime(pay_date, "%Y-%m-%d").strftime("%d/%m/%Y")
     kb = [[
         InlineKeyboardButton("✅ تأكيد الدفع", callback_data="confirm_pay"),
         InlineKeyboardButton("❌ إلغاء",        callback_data="cancel_pay"),
@@ -825,8 +889,7 @@ async def pay_select(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         f"💳 *تأكيد استلام الدفعة*\n\n"
         f"👤 {client['name']}\n📞 {client['phone']}\n"
         f"📦 {client['package']}\n💰 {client['sell']} ج.م\n"
-        f"📅 {datetime.now().strftime('%d/%m/%Y')}\n\n"
-        f"⚠️ سيتم تسجيل تاريخ اليوم كـ «تاريخ استلام فلوس الشحن» تلقائياً.",
+        f"📅 تاريخ الاستلام: *{display}*",
         reply_markup=InlineKeyboardMarkup(kb),
         parse_mode="Markdown",
     )
@@ -840,12 +903,14 @@ async def pay_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
     await query.edit_message_text("⏳ ثانية بسجل الدفعة يا نجم... 💳")
     try:
-        mark_as_paid(ctx.user_data["pay_row_num"])
-        c = ctx.user_data["pay_client"]
+        pay_date = ctx.user_data.get("pay_date", datetime.now().strftime("%Y-%m-%d"))
+        mark_as_paid(ctx.user_data["pay_row_num"], pay_date)
+        c        = ctx.user_data["pay_client"]
+        display  = datetime.strptime(pay_date, "%Y-%m-%d").strftime("%d/%m/%Y")
         await query.edit_message_text(
             f"✅ *تم تسجيل الدفعة!*\n\n"
             f"👤 {c['name']}\n💰 {c['sell']} ج.م\n"
-            f"📅 تاريخ الاستلام: {datetime.now().strftime('%d/%m/%Y')}",
+            f"📅 تاريخ الاستلام: {display}",
             parse_mode="Markdown",
         )
     except Exception as e:
@@ -939,31 +1004,62 @@ async def receive_amount(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ رقم غير صحيح، اكتب المبلغ:")
         return STATE_RECEIVE_AMOUNT
     ctx.user_data["receive_amount"] = amount
+    kb = [
+        [InlineKeyboardButton("🔌 رصيد على لوحة الشحن (تلقائي)", callback_data="recnote_auto")],
+        [InlineKeyboardButton("✏️ اكتب ملاحظة يدوياً",             callback_data="recnote_manual")],
+    ]
     await update.message.reply_text(
-        f"📥 المبلغ المستلم: *{amount} ج.م*\n\n"
-        f"📝 اكتب ملاحظة (مثلاً: واتساب / يد بيد) أو /skip:",
+        f"📥 المبلغ المستلم: *{amount} ج.م*\n\nتسجّل الملاحظة إزاي؟",
+        reply_markup=InlineKeyboardMarkup(kb),
         parse_mode="Markdown",
     )
     return STATE_RECEIVE_NOTE
 
 async def receive_note(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
-    ctx.user_data["receive_note"] = "" if text == "/skip" else text.strip()
-    amount = ctx.user_data["receive_amount"]
-    s      = get_summary()
-    kb = [[
-        InlineKeyboardButton("✅ تأكيد", callback_data="confirm_receive"),
-        InlineKeyboardButton("❌ إلغاء", callback_data="cancel_receive"),
-    ]]
-    await update.message.reply_text(
-        f"📥 *تأكيد استلام الرصيد*\n\n"
-        f"💵 المبلغ: *{amount} ج.م*\n"
-        f"📝 {ctx.user_data['receive_note'] or '—'}\n\n"
-        f"📶 رصيد WE بعد الاستلام: {s['we_bal'] + amount:.2f} ج.م",
-        reply_markup=InlineKeyboardMarkup(kb),
-        parse_mode="Markdown",
-    )
-    return STATE_RECEIVE_CONFIRM
+    # يستقبل إما callback (تلقائي / يدوي) أو نص مكتوب
+    if update.callback_query:
+        query = update.callback_query
+        await query.answer()
+        if query.data == "recnote_auto":
+            ctx.user_data["receive_note"] = "رصيد على لوحة الشحن"
+            amount = ctx.user_data["receive_amount"]
+            s      = get_summary()
+            kb = [[
+                InlineKeyboardButton("✅ تأكيد", callback_data="confirm_receive"),
+                InlineKeyboardButton("❌ إلغاء", callback_data="cancel_receive"),
+            ]]
+            await query.edit_message_text(
+                f"📥 *تأكيد استلام الرصيد*\n\n"
+                f"💵 المبلغ: *{amount} ج.م*\n"
+                f"📝 رصيد على لوحة الشحن\n\n"
+                f"📶 رصيد WE بعد الاستلام: {s['we_bal'] + amount:.2f} ج.م",
+                reply_markup=InlineKeyboardMarkup(kb),
+                parse_mode="Markdown",
+            )
+            return STATE_RECEIVE_CONFIRM
+        else:
+            # يدوي — اطلب نص
+            await query.edit_message_text("✏️ اكتب الملاحظة يدوياً (أو /skip لو مفيش):")
+            return STATE_RECEIVE_NOTE
+    else:
+        # نص مكتوب
+        text = update.message.text
+        ctx.user_data["receive_note"] = "" if text == "/skip" else text.strip()
+        amount = ctx.user_data["receive_amount"]
+        s      = get_summary()
+        kb = [[
+            InlineKeyboardButton("✅ تأكيد", callback_data="confirm_receive"),
+            InlineKeyboardButton("❌ إلغاء", callback_data="cancel_receive"),
+        ]]
+        await update.message.reply_text(
+            f"📥 *تأكيد استلام الرصيد*\n\n"
+            f"💵 المبلغ: *{amount} ج.م*\n"
+            f"📝 {ctx.user_data['receive_note'] or '—'}\n\n"
+            f"📶 رصيد WE بعد الاستلام: {s['we_bal'] + amount:.2f} ج.م",
+            reply_markup=InlineKeyboardMarkup(kb),
+            parse_mode="Markdown",
+        )
+        return STATE_RECEIVE_CONFIRM
 
 async def receive_confirm(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -1059,14 +1155,18 @@ def main():
             STATE_ADD_CONFIRM: [CallbackQueryHandler(add_confirm, pattern="^(confirm|cancel)_add")],
 
             # شحن إضافي (مسار مستقل بتحقق ذكي)
-            STATE_EXTRA_PHONE:   [MessageHandler(filters.TEXT & ~filters.COMMAND, extra_phone)],
-            STATE_EXTRA_GIGA:    [MessageHandler(filters.TEXT & ~filters.COMMAND, extra_giga)],
-            STATE_EXTRA_CONFIRM: [CallbackQueryHandler(extra_confirm, pattern="^(confirm|cancel)_extra")],
+            STATE_EXTRA_SEARCH_TYPE: [CallbackQueryHandler(extra_search_type, pattern="^extra_search_")],
+            STATE_EXTRA_NAME:        [MessageHandler(filters.TEXT & ~filters.COMMAND, extra_name)],
+            STATE_EXTRA_PHONE:       [MessageHandler(filters.TEXT & ~filters.COMMAND, extra_phone)],
+            STATE_EXTRA_GIGA:        [MessageHandler(filters.TEXT & ~filters.COMMAND, extra_giga)],
+            STATE_EXTRA_CONFIRM:     [CallbackQueryHandler(extra_confirm, pattern="^(confirm|cancel)_extra")],
 
             # دفعة
-            STATE_PAY_SEARCH:  [MessageHandler(filters.TEXT & ~filters.COMMAND, pay_search)],
-            STATE_PAY_SELECT:  [CallbackQueryHandler(pay_select,  pattern="^pay_")],
-            STATE_PAY_CONFIRM: [CallbackQueryHandler(pay_confirm, pattern="^(confirm|cancel)_pay")],
+            STATE_PAY_SEARCH:     [MessageHandler(filters.TEXT & ~filters.COMMAND, pay_search)],
+            STATE_PAY_SELECT:     [CallbackQueryHandler(pay_select,      pattern="^pay_")],
+            STATE_PAY_DATE_CHOICE:[CallbackQueryHandler(pay_date_choice, pattern="^paydate_")],
+            STATE_PAY_CUSTOM_DATE:[CallbackQueryHandler(pay_custom_date, pattern="^pickdate_")],
+            STATE_PAY_CONFIRM:    [CallbackQueryHandler(pay_confirm,     pattern="^(confirm|cancel)_pay")],
 
             # تحويل للمدير
             STATE_TRANSFER_AMOUNT:  [MessageHandler(filters.TEXT & ~filters.COMMAND, transfer_amount)],
@@ -1075,7 +1175,10 @@ def main():
 
             # استلام رصيد
             STATE_RECEIVE_AMOUNT:  [MessageHandler(filters.TEXT & ~filters.COMMAND, receive_amount)],
-            STATE_RECEIVE_NOTE:    [MessageHandler(filters.TEXT | filters.COMMAND,   receive_note)],
+            STATE_RECEIVE_NOTE:    [
+                CallbackQueryHandler(receive_note, pattern="^recnote_"),
+                MessageHandler(filters.TEXT | filters.COMMAND, receive_note),
+            ],
             STATE_RECEIVE_CONFIRM: [CallbackQueryHandler(receive_confirm, pattern="^(confirm|cancel)_receive")],
 
             # بحث
