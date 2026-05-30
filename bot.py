@@ -81,7 +81,7 @@ logger = logging.getLogger(__name__)
     STATE_SEARCH_CLIENT,
     STATE_EXTRA_SEARCH_TYPE, STATE_EXTRA_PHONE, STATE_EXTRA_NAME,
     STATE_EXTRA_GIGA, STATE_EXTRA_CONFIRM,
-) = range(26)
+) = range(25)
 
 SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
